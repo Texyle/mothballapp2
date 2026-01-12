@@ -9,8 +9,9 @@ from PyQt5.QtGui import QColor, QFont, QKeySequence
 from PyQt5.QtCore import Qt, QEvent, QObject
 from PyQt5.Qsci import QsciLexerCustom, QsciScintilla
 from utils import *
-from Linters import CodeLinter, MDLinter
-from typing import Literal
+from typing import Literal, TYPE_CHECKING
+if TYPE_CHECKING:
+    from Linters import CodeLinter, MDLinter
 import os, sys
 from Enums import *
 import datetime
@@ -274,12 +275,12 @@ class RenderViewer(QTextBrowser):
         self.setOpenExternalLinks(True)
         self.verticalScrollBar().setVisible(False)
     
-    def renderTextfromOutput(self, linter: CodeLinter, output: list[tuple[str,str]], displayOutputBackground: bool = False):
+    def renderTextfromOutput(self, linter: 'CodeLinter', output: list[tuple[str,str]], displayOutputBackground: bool = False):
         "Render raw output into html text."
         tokens = linter.parseOutput(output, displayOutputBackground)
         self.render(tokens)
     
-    def renderTextfromMarkdown(self, linter: MDLinter, text: str):
+    def renderTextfromMarkdown(self, linter: 'MDLinter', text: str):
         "Render the markdown into html text."
         tokens = linter.parseTextToRender(text)
         self.render(tokens)

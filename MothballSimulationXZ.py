@@ -4,6 +4,7 @@ from typing import Literal
 from BaseMothballSimulation import BasePlayer, MothballSequence
 from Enums import ExpressionType
 from collections import deque
+from InlineOptimizer import InlineOptimizer, OptTick
 
 class Tick:
     def __init__(self, w: bool, a: bool, s: bool, d: bool, sneak: bool, sprint: bool, space: bool, right_click: bool, last_turn: float, x: float = None, z: float = None, vx: float = None, vz: float = None):
@@ -115,6 +116,7 @@ class PlayerSimulationXZ(BasePlayer):
 
         self.history: list[Tick] = []
         self.macros: dict[str, str] = {}
+        self.opthistory: list[OptTick] = []
 
     def get_angle(self):
         "Returns the next angle from the rotation queue or if no angle is in the rotation queue, return the default facing."
@@ -195,6 +197,9 @@ class PlayerSimulationXZ(BasePlayer):
             # Finalize Momentum
             self.vx *= f32(0.91) * self.previous_slip
             self.vz *= f32(0.91) * self.previous_slip
+            
+            old_vx = self.vx
+            old_vz = self.vz
 
             # Apply inertia or web
             if self.inertia_axis == 1:
@@ -275,6 +280,16 @@ class PlayerSimulationXZ(BasePlayer):
             self.inertialistener_helper()
 
             self.history.append(Tick('w' in self.inputs, 'a' in self.inputs, 's' in self.inputs, 'd' in self.inputs, is_sneaking, is_sprinting, self.state == self.JUMP, bool(self.modifiers & self.BLOCK), self.last_turn, self.x, self.z, self.vx, self.vz))
+            
+            # Record history for turn optimizer
+            optTick = OptTick()
+            dvx = self.vx - old_vx
+            dvz = self.vz - old_vz
+            optTick.accel = sqrt(dvx**2 + dvz**2)
+            optTick.drag_x = f32(0.91) * self.previous_slip #TODO consider inertia
+            optTick.drag_z = f32(0.91) * self.previous_slip
+            self.opthistory.append(optTick)
+            
     
     def move_new(self, duration: int, rotation: f32 = None, rotation_offset: float = 0.0, slip: f32 = None, is_sprinting: bool = False, is_sneaking: bool = False, speed: int = None, slow: int = None, state: Literal["ground", "air", "jump"] = "ground"):
         """
@@ -1334,6 +1349,38 @@ class PlayerSimulationXZ(BasePlayer):
 
         if abs(PlayerSimulationXZ.dist_to_block(self.x) - xb) > 1e-5:
             self.add_to_output(ExpressionType.WARNING, string_or_num="encountered inertia on X while optimizing!")
+            
+    @BasePlayer.record_to_call_stack
+    def optimizeturn(self, sequence: MothballSequence, /):
+        "Optimizes the turn for the given input while satisfying specified restrictions."        
+        
+        parsed_tokens = self.parse(sequence)
+        runnables = []
+        
+        for token in parsed_tokens:
+            runnables.append(self.tokenize(token, locals=locals))
+            
+        init = sqrt(self.vx**2 + self.vz**2)
+        angle = deg(arctan(-self.vx, self.vz))
+            
+        player = PlayerSimulationXZ.copy_player(self)
+        self.optimizer = InlineOptimizer()
+        self.optimizer.optimize(init, angle, player, sequence, self.optimizeturn_completed)
+        
+    def optimizeturn_completed(self, res, constraint_values, postprocess_dict):
+        if isinstance(res, str):
+            print(f"{res} {constraint_values}")
+            return
+        
+        angles = [round(deg(p),3) for p in res.x]
+        for i, angle in enumerate(angles):
+            # Range of angle is [-360, 360]
+            if angle > 180:
+                angles[i] = round(angle - 360,3)
+            elif angle < -180:
+                angles[i] = round(angle + 360,3)
+                
+            self.add_to_output(ExpressionType.WARNING, string_or_num=f'{angles[i]}')
 
     def mcsin(self, rad):
         if self.total_angles == -1:
@@ -1461,7 +1508,8 @@ class PlayerSimulationXZ(BasePlayer):
             "inertialistener": inertialistener, "il": inertialistener, "xzinertialistener": inertialistener, "xzil": inertialistener,
             "xinertialistener": xinertialistener, "xil": xinertialistener,
             "zinertialistener": zinertialistener, "zil": zinertialistener,
-            "macro": macro
+            "macro": macro,
+            "optimizeturn": optimizeturn, "opt": optimizeturn
             }
     ALIASES = BasePlayer.ALIASES
     for alias, func in FUNCTIONS.items():
