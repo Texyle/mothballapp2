@@ -12,6 +12,17 @@ class OptTick:
         self.drag_x = float(drag_x)
         self.drag_z = float(drag_z)
         
+class Restriction:
+    def __init__(self, option: str, tick_1: int, tick_2: int, sign: str, value: float):
+        self.option = option
+        self.tick_1 = tick_1
+        self.tick_2 = tick_2
+        self.sign = sign
+        self.value = value
+    
+    def to_list(self):
+        return ['YES', '', self.option, str(self.tick_1), '-', str(self.tick_2), self.sign, str(self.value)]
+        
 class InlineOptimizer:
     def __init__(self):
         pass
@@ -44,7 +55,7 @@ class InlineOptimizer:
         variables = {}
         variables['num_ticks'] = len(data[0])
         
-        constraints = [['YES', '', 'X', '11', '-', '0', '>', '2']]
+        constraints = [res.to_list() for res in player.restrictions]
             
         worker = Worker(OptimizeCellAxis.X, 'min', variables, data, constraints)
         worker.finished.connect(on_completion)

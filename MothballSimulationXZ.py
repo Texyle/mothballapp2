@@ -4,7 +4,7 @@ from typing import Literal
 from BaseMothballSimulation import BasePlayer, MothballSequence
 from Enums import ExpressionType
 from collections import deque
-from InlineOptimizer import InlineOptimizer, OptTick
+from InlineOptimizer import InlineOptimizer, OptTick, Restriction
 
 class Tick:
     def __init__(self, w: bool, a: bool, s: bool, d: bool, sneak: bool, sprint: bool, space: bool, right_click: bool, last_turn: float, x: float = None, z: float = None, vx: float = None, vz: float = None):
@@ -117,6 +117,7 @@ class PlayerSimulationXZ(BasePlayer):
         self.history: list[Tick] = []
         self.macros: dict[str, str] = {}
         self.opthistory: list[OptTick] = []
+        self.restrictions: list[Restriction] = []
 
     def get_angle(self):
         "Returns the next angle from the rotation queue or if no angle is in the rotation queue, return the default facing."
@@ -1381,6 +1382,18 @@ class PlayerSimulationXZ(BasePlayer):
                 angles[i] = round(angle + 360,3)
                 
             self.add_to_output(ExpressionType.WARNING, string_or_num=f'{angles[i]}')
+            
+    def restrictx(self, expression: str, tick_2: int = 0):
+        self.restrict('X', expression, tick_2)
+        
+    def restrictz(self, expression: str, tick_2: int = 0):
+        self.restrict('Z', expression, tick_2)
+        
+    def restrict(self, option: str, expression: str, tick_2: int = 0):
+        sign = expression[0]
+        value = float(expression[1:])
+        res = Restriction(option, len(self.history), tick_2, sign, value)
+        self.restrictions.append(res)
 
     def mcsin(self, rad):
         if self.total_angles == -1:
@@ -1509,7 +1522,9 @@ class PlayerSimulationXZ(BasePlayer):
             "xinertialistener": xinertialistener, "xil": xinertialistener,
             "zinertialistener": zinertialistener, "zil": zinertialistener,
             "macro": macro,
-            "optimizeturn": optimizeturn, "opt": optimizeturn
+            "optimizeturn": optimizeturn, "opt": optimizeturn,
+            "restrictx": restrictx, "rx": restrictx,
+            "restrictz": restrictz, "rz": restrictz
             }
     ALIASES = BasePlayer.ALIASES
     for alias, func in FUNCTIONS.items():
